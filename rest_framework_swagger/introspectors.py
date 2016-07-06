@@ -308,11 +308,14 @@ class BaseMethodIntrospector(object):
         query parameters as well as HTTP body parameters that are defined by
         the DRF serializer fields
         """
+        parser = self.get_yaml_parser()
         params = []
         path_params = self.build_path_parameters()
         body_params = self.build_body_parameters()
         form_params = self.build_form_parameters()
         query_params = self.build_query_parameters()
+        if parser.should_use_serializer_for_query_params():
+            query_params.extend(self.build_query_parameters_from_serializer())
         if django_filters is not None:
             query_params.extend(
                 self.build_query_parameters_from_django_filters())
@@ -424,8 +427,14 @@ class BaseMethodIntrospector(object):
                 params.append(parameter)
 
         return params
+ 
+    def build_query_parameters_from_serializer(self):
+        return self.build_parameters_from_serializer(param_type='query')
 
     def build_form_parameters(self):
+        return self.build_parameters_from_serializer()
+
+    def build_parameters_from_serializer(self, param_type='form'):
         """
         Builds form parameters from the serializer class
         """
@@ -465,7 +474,7 @@ class BaseMethodIntrospector(object):
                 data_type, data_format = get_primitive_type(choices[0]) or ('string', 'string')
 
             f = {
-                'paramType': 'form',
+                'paramType': param_type,
                 'name': name,
                 'description': getattr(field, 'help_text', '') or '',
                 'type': data_type,
@@ -1204,6 +1213,12 @@ class YAMLDocstringParser(object):
         Checks if serializer should be intentionally omitted
         """
         return self.object.get('omit_serializer', False)
+
+    def should_use_serializer_for_query_params(self):
+        """
+        Checks if serializer should be used to build query params
+        """
+        return self.object.get('use_serializer_for_query_params', False)
 
     def _apply_strategy(self, param_type, method_params, docstring_params):
         """
